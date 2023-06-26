@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	corev2 "github.com/sensu/core/v2"
@@ -29,6 +30,9 @@ type Config struct {
 	PendingAlerts      bool
 	Labels             map[string]string
 	Annotations        map[string]string
+	Warning            bool
+	Critical           bool
+	FailureLevelLabel  string
 	VerboseLogging     bool
 }
 
@@ -115,6 +119,33 @@ var (
 			Value:     &plugin.Annotations,
 		},
 		&sensu.PluginConfigOption[bool]{
+			Path:      "warning",
+			Env:       "",
+			Argument:  "warning",
+			Shorthand: "w",
+			Default:   false,
+			Usage:     "If specified, a failed check will result in a warning result.",
+			Value:     &plugin.Warning,
+		},
+		&sensu.PluginConfigOption[bool]{
+			Path:      "critical",
+			Env:       "",
+			Argument:  "critical",
+			Shorthand: "c",
+			Default:   false,
+			Usage:     "If specified, a failed check will result in a critical result. (Default)",
+			Value:     &plugin.Critical,
+		},
+		&sensu.PluginConfigOption[string]{
+			Path:      "failure-level-label",
+			Env:       "",
+			Argument:  "failure-level-label",
+			Shorthand: "F",
+			Default:   "",
+			Usage:     "If specified, the result of a failed task will be determined by the specified Prometheus label. The label must have the value of 'warning' or 'critical'.",
+			Value:     &plugin.FailureLevelLabel,
+		},
+		&sensu.PluginConfigOption[bool]{
 			Path:      "verbose",
 			Env:       "",
 			Argument:  "verbose",
@@ -157,6 +188,14 @@ func checkArgs(event *corev2.Event) (int, error) {
 		return sensu.CheckStateWarning, fmt.Errorf("both --pending and --firing cannot be specified at the same time")
 	}
 
+	if plugin.Warning && plugin.Critical {
+		return sensu.CheckStateWarning, fmt.Errorf("both --warning and --critical cannot be specified at the same time")
+	}
+
+	if len(plugin.FailureLevelLabel) > 0 && (plugin.Warning || plugin.Critical) {
+		return sensu.CheckStateWarning, fmt.Errorf("--warning and --critical cannot be specified with --failure-level-label")
+	}
+
 	return sensu.CheckStateOK, nil
 }
 
@@ -193,11 +232,48 @@ func executeCheck(event *corev2.Event) (int, error) {
 		}
 
 		fmt.Println(string(bytes))
-		return sensu.CheckStateCritical, nil
+		return GetFailureLevel(alerts), nil
 	}
 
 	log.Println("Check passed, no alerts found.")
 	return sensu.CheckStateOK, nil
+}
+
+func GetFailureLevel(alerts []Alert) int {
+	if len(plugin.FailureLevelLabel) > 0 {
+		found := false
+		result := sensu.CheckStateUnknown
+
+		for _, alert := range alerts {
+			label, ok := alert.Labels[plugin.FailureLevelLabel]
+			if ok {
+				found = true
+				clean := strings.ToLower(strings.TrimSpace(label))
+
+				// Pick the highest warning level.
+				// If the result is not unknown, it must be warning or critical. We only want to override the unknown level.
+				if clean == "warning" && result == sensu.CheckStateUnknown {
+					result = sensu.CheckStateWarning
+				} else if clean == "critical" { // Critical is the highest.
+					result = sensu.CheckStateCritical
+				}
+			}
+		}
+
+		if !found {
+			log.Println("Unable to find failure level label. Defaulting to unknown.")
+			result = sensu.CheckStateUnknown
+		}
+
+		return result
+	} else if plugin.Critical {
+		return sensu.CheckStateCritical
+	} else if plugin.Warning {
+		return sensu.CheckStateWarning
+	} else {
+		// Use critical by default.
+		return sensu.CheckStateCritical
+	}
 }
 
 func CopyToEvent(names []string, src map[string]string, dest map[string]string) {
