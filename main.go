@@ -61,7 +61,7 @@ var (
 			Argument:  "insecure-skip-verify",
 			Shorthand: "i",
 			Default:   false,
-			Usage:     "Skip TLS certificate verification (not recommended!)",
+			Usage:     "Skip TLS certificate verification (not recommended!).",
 			Value:     &plugin.InsecureSkipVerify,
 		},
 		&sensu.PluginConfigOption[string]{
@@ -70,7 +70,7 @@ var (
 			Argument:  "trusted-ca-file",
 			Shorthand: "T",
 			Default:   "",
-			Usage:     "TLS CA certificate bundle in PEM format",
+			Usage:     "TLS CA certificate bundle in PEM format.",
 			Value:     &plugin.TrustedCAFile,
 		},
 		&sensu.PluginConfigOption[int]{
