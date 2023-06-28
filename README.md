@@ -45,7 +45,7 @@ following command to add the asset:
 sensuctl asset add alasconnect/sensu-prometheus-alert-check
 ```
 
-If you're using an earlier version of sensuctl, you can find the asset on the [Bonsai Asset Index][https://bonsai.sensu.io/assets/alasconnect/sensu-prometheus-alert-check].
+If you're using an earlier version of sensuctl, you can find the asset on the [Bonsai Asset Index](https://bonsai.sensu.io/assets/alasconnect/sensu-prometheus-alert-check).
 
 ### Check definition
 
